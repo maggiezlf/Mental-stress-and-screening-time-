@@ -1,0 +1,221 @@
+---
+title: "GameOn"
+author: "Lifan Zhao"
+date: "2025-03-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+About this file
+The dataset includes columns that track an individual's daily technology usage and mental health indicators. Here’s what’s included:
+
+User_ID: A unique identifier for each participant.
+Age: The age of the participant.
+Daily_Screen_Time (hours): Average daily screen time in hours.
+Mental_Health_Score (1-10): Self-reported mental health score, where 1 is poor, and 10 is excellent.
+Stress_Level (1-10): Self-reported stress level, where 1 is very low, and 10 is very high.
+Sleep_Quality (1-10): Self-reported sleep quality score.
+
+
+
+loading data
+```{r}
+library(tidyverse)
+data = read_csv("mental_health_and_technology_usage_2024.csv")
+data
+```
+Summarize data
+```{r}
+used_data = data%>%
+  select(Age,Gender,Technology_Usage_Hours,Social_Media_Usage_Hours,Gaming_Hours,Screen_Time_Hours,Mental_Health_Status,Stress_Level, Sleep_Hours, Physical_Activity_Hours)
+
+summary(used_data) #summary of the used data
+
+```
+getting numbers of genders:
+```{r}
+library(sqldf)
+num_gender = sqldf("SELECT 
+    SUM(CASE WHEN Gender = 'Female' THEN 1 ELSE 0 END) AS num_female,
+    SUM(CASE WHEN Gender = 'Male' THEN 1 ELSE 0 END) AS num_male,
+    SUM(CASE WHEN Gender = 'Other' THEN 1 ELSE 0 END) AS num_other
+FROM data
+      ")
+num_gender
+```
+getting numbers of different mental health status:
+```{r}
+library(sqldf)
+num_mental = sqldf("SELECT 
+    SUM(CASE WHEN Mental_Health_Status = 'Poor' THEN 1 ELSE 0 END) AS num_poor,
+    SUM(CASE WHEN Mental_Health_Status = 'Fair' THEN 1 ELSE 0 END) AS num_fair,
+    SUM(CASE WHEN Mental_Health_Status = 'Good' THEN 1 ELSE 0 END) AS num_good,
+    SUM(CASE WHEN Mental_Health_Status = 'Excellent' THEN 1 ELSE 0 END) AS num_excellent
+FROM data
+      ")
+num_mental
+```
+getting numbers of different stress level:
+```{r}
+library(sqldf)
+num_stress = sqldf("SELECT 
+    SUM(CASE WHEN Stress_Level = 'Low' THEN 1 ELSE 0 END) AS num_low,
+    SUM(CASE WHEN Stress_Level = 'Medium' THEN 1 ELSE 0 END) AS num_medium,
+    SUM(CASE WHEN Stress_Level = 'High' THEN 1 ELSE 0 END) AS num_high
+FROM data
+      ")
+num_stress
+```
+
+
+
+Converting mental health status to numbers
+```{r}
+data = data %>% 
+  mutate(mental_scale_value = case_when(
+    Mental_Health_Status == "Excellent" ~ 2,
+    Mental_Health_Status == "Good" ~ 1,
+    Mental_Health_Status == "Fair" ~ 0,
+    Mental_Health_Status == "Poor" ~ -1,
+  ))
+  
+Age_Mental = data%>%
+  group_by(Age)%>%
+  summarise(mean_mental = mean(mental_scale_value))
+Age_Mental
+```
+
+
+Graph of age and mean mental health
+```{r}
+library(ggplot2)
+Age_split <- cut(Age_Mental$Age, breaks=c(9,19,29,39,49,59,69,79),
+                 labels=c("10","20", "30", "40", "50", "60","70"))
+age_colors <- c(
+  "10" = "red",
+  "20" = "#f8766d",  
+  "30" = "#a3a500",  
+  "40" = "#03bf7d",  
+  "50" = "#00b0f6",  
+  "60" = "#e86bf3",
+  "70" = "purple"
+)  
+
+
+Age_Mental %>%
+  mutate(Age_split = Age_split) %>%  
+  ggplot(aes(x = Age, y = mean_mental, color = Age_split)) + 
+  geom_point(size = 3, shape = 16) +
+  geom_line(size = 1)+
+  theme_minimal(base_size = 10) +
+  labs(title = "Age and Mean Mental health scale",
+       y = "Mean Mental Health Scale",
+       x = "Age",
+       color = "Age") +
+  theme(legend.title = element_text(size = 16, face = "bold"),
+        plot.title = element_text(size = 24, face = "bold"),
+        axis.title = element_text(size = 20),
+        legend.position = "right")+
+  geom_smooth(method = "loess",  
+            se = TRUE,
+            color = "grey",   
+            fill = "grey",
+            alpha = 0.2,
+            show.legend = FALSE)  
+
+```
+
+Mean Technology, Social, Gaming, Screen Time 
+```{r}
+#find the mean fo all 4
+
+mean_tech = mean(data$Technology_Usage_Hours)
+mean_social = mean(data$Social_Media_Usage_Hours)
+mean_gaming = mean(data$Gaming_Hours)
+mean_screen = mean(data$Screen_Time_Hours)
+
+mean_time = data.frame(
+  Category = c("Technology Usage", "Social Media Usage", "Gaming Time", "Screen Time"),
+  Mean_Hours = c(mean_tech, mean_social, mean_gaming, mean_screen)
+)
+
+mean_time
+```
+
+plot column 
+
+```{r}
+cate_color <- c(
+  "Technology Usage" = "#f8766d",  
+  "Social Media Usage" = "#a3a500",  
+  "Gaming Time" = "#03bf7d",  
+  "Screen Time" = "#00b0f6"
+)  
+
+mean_time %>%
+  ggplot(mapping = aes(x = Category, y = Mean_Hours, fill = cate_color)) +
+  geom_col()+
+  theme(legend.position = "none")
+```
+Looking from at the graph, Screen time is the highest of all, and the gaming time is the lowest. This is reasonable since not all people play games, but they do use their phones or other products. 
+
+
+Mental and Social:
+Poor:
+```{r}
+data_mental_poor = data%>%
+  filter(Mental_Health_Status == "Poor")%>%
+  select(Social_Media_Usage_Hours,Gaming_Hours,Screen_Time_Hours)
+data_mental_poor
+```
+
+graphing
+```{r}
+poor_data <- data_mental_poor %>%
+  mutate(Social_Hours = floor(Social_Media_Usage_Hours),
+         Gaming_Hours = floor(Gaming_Hours),
+         Screen_Hours = floor(Screen_Time_Hours)) %>%
+  pivot_longer(cols = c(Social_Hours, Gaming_Hours, Screen_Hours), 
+               names_to = "Category", values_to = "Hours") %>%
+  group_by(Category, Hours) %>%
+  summarise(num_people = n(), .groups = "drop") %>%
+  ggplot(aes(x = factor(Hours), y = num_people, fill = Category)) +  
+  geom_col(position = "dodge") +  # dodge let the different columns show together
+  labs(x = "Usage Hours", y = "Number of People", title = "Comparison of Different Usage Hours With Poor Mental Health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  
+poor_data
+
+```
+
+For Fair (similar progress as above)
+```{r}
+data_mental_fair = data%>%
+  filter(Mental_Health_Status == "Fair")%>%
+  select(Social_Media_Usage_Hours,Gaming_Hours,Screen_Time_Hours)
+data_mental_fair
+```
+
+```{r}
+fair_data <- data_mental_fair %>%
+  mutate(Social_Hours = floor(Social_Media_Usage_Hours),
+         Gaming_Hours = floor(Gaming_Hours),
+         Screen_Hours = floor(Screen_Time_Hours)) %>%
+  pivot_longer(cols = c(Social_Hours, Gaming_Hours, Screen_Hours), 
+               names_to = "Category", values_to = "Hours") %>%
+  group_by(Category, Hours) %>%
+  summarise(num_people = n(), .groups = "drop") %>%
+  ggplot(aes(x = factor(Hours), y = num_people, fill = Category)) +  
+  geom_col(position = "dodge") + 
+  labs(x = "Usage Hours", y = "Number of People", title = "Comparison of Different Usage Hours With Fair Mental Health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+
+print(fair_data)
+
+```
+
+The other two graphs are in another file.
