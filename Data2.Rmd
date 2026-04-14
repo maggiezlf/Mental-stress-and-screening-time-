@@ -1,0 +1,210 @@
+---
+title: "DataGroup"
+output: html_document
+date: "2025-03-13"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+Mental Health and Social - Good and Excellent
+
+```{r}
+library(tidyverse)
+data = read_csv("mental_health_and_technology_usage_2024.csv")
+
+data_mental_good = data%>%
+  filter(Mental_Health_Status == "Good")
+
+Social_Good <- data_mental_good %>%
+  mutate(Hour_Range = cut(Social_Media_Usage_Hours, 
+                          breaks = seq(0, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)), by = 1), 
+                          right = FALSE, 
+                          labels = paste0(seq(0, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)) - 1), 
+                                          "-", 
+                                          seq(1, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)))))) %>%
+  group_by(Hour_Range) %>%
+  summarise(num_people = n()) %>%
+  ggplot(mapping = aes(x = Hour_Range, y = num_people, fill = "blue")) +
+  geom_col(show.legend = FALSE) +
+  labs(x = "Social Media Usage Hours", y = "Number of People", title = "Distribution of Social Media Usage With Good Mental Health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # 旋转x轴标签，防止重叠
+
+
+
+Social_Good
+
+
+
+
+long_data <- data_mental_good %>%
+  mutate(Social_Hours = floor(Social_Media_Usage_Hours),
+         Gaming_Hours = floor(Gaming_Hours),
+         Screen_Hours = floor(Screen_Time_Hours)) %>%
+  pivot_longer(cols = c(Social_Hours, Gaming_Hours, Screen_Hours), 
+               names_to = "Category", values_to = "Hours") %>%
+  group_by(Category, Hours) %>%
+  summarise(num_people = n(), .groups = "drop") %>%
+  ggplot(aes(x = factor(Hours), y = num_people, fill = Category)) +  # 使用 Category 作为 fill
+  geom_col(position = "dodge") +  # dodge 让不同类别的柱子并排显示
+  labs(x = "Usage Hours", y = "Number of People", title = "Comparison of Different Usage Hours With Good Mental Health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # 旋转x轴标签，防止重叠
+
+print(long_data)
+
+```
+```{r}
+data_mental_excellent = data%>%
+  filter(Mental_Health_Status == "Poor")
+
+Social_Excellent <- data_mental_excellent %>%
+  mutate(Hour_Range = cut(Social_Media_Usage_Hours, 
+                          breaks = seq(0, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)), by = 1), 
+                          right = FALSE, 
+                          labels = paste0(seq(0, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)) - 1), 
+                                          "-", 
+                                          seq(1, ceiling(max(Social_Media_Usage_Hours, na.rm = TRUE)))))) %>%
+  group_by(Hour_Range) %>%
+  summarise(num_people = n()) %>%
+  ggplot(mapping = aes(x = Hour_Range, y = num_people, fill = "blue")) +
+  geom_col(show.legend = FALSE) +
+  labs(x = "Social Media Usage Hours", y = "Number of People", title = "Distribution of Social Media Usage With Excellent Mental Health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # 旋转x轴标签，防止重叠
+
+
+
+Social_Excellent
+
+long_data <- data_mental_excellent %>%
+  mutate(Social_Hours = floor(Social_Media_Usage_Hours),
+         Gaming_Hours = floor(Gaming_Hours),
+         Screen_Hours = floor(Screen_Time_Hours)) %>%
+  pivot_longer(cols = c(Social_Hours, Gaming_Hours, Screen_Hours), 
+               names_to = "Category", values_to = "Hours") %>%
+  group_by(Category, Hours) %>%
+  summarise(num_people = n(), .groups = "drop") %>%
+  ggplot(aes(x = factor(Hours), y = num_people, fill = Category)) +  # 使用 Category 作为 fill
+  geom_col(position = "dodge") +  # dodge 让不同类别的柱子并排显示
+  labs(x = "Usage Hours", y = "Number of People", title = "Comparison of Different Usage Hours with Excellent mental health") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))  # 旋转x轴标签，防止重叠
+
+print(long_data)
+
+
+```
+
+starting with some anova and predictions
+```{r}
+library(tidyverse)
+data01 = data %>% 
+  mutate(mental_scale_value = case_when(
+    Mental_Health_Status == "Excellent" ~ 2,
+    Mental_Health_Status == "Good" ~ 1,
+    Mental_Health_Status == "Fair" ~ 0,
+    Mental_Health_Status == "Poor" ~ -1
+  ))%>%
+  mutate(stress_level = case_when(
+    Stress_Level == "High" ~ 1,
+    Stress_Level == "Medium" ~ 0,
+    Stress_Level == "Low" ~ -1
+  ))%>%
+  select(Age,Gender,Technology_Usage_Hours ,Social_Media_Usage_Hours, Gaming_Hours,stress_level,Screen_Time_Hours,Sleep_Hours,mental_scale_value ,Support_Systems_Access,Work_Environment_Impact)
+str(data01)
+```
+
+
+```{r}
+mod_mental = lm(mental_scale_value ~ ., data = data01)
+summary(mod_mental)
+```
+```{r}
+
+# 自动变量选择（前向、后向、逐步）
+s = step(lm(mental_scale_value ~ ., data = data01), direction = "both")
+```
+```{r}
+final = lm(mental_scale_value ~ Support_Systems_Access, data = data01)
+final
+```
+We can see that the final didn't include stress and screen time.
+Why did screen_time and stress_level not work?
+Some possible reasons:
+
+The relationship between screen_time/stress_level and mental health is weak, so they don’t significantly affect the model.
+
+You might not have enough data to detect a significant relationship, even if one exists.
+
+Multicollinearity: Variables like screen_time and tech_usage might be too similar, causing one to mask the effect of the other.
+
+Measurement error: For example, if the mental_health scale is too narrow or lacks standardization.
+
+
+```{r}
+str(data)
+model_interaction <- lm(mental_scale_value ~ stress_level * Screen_Time_Hours, data = data01)
+summary(model_interaction)
+```
+
+
+stress level 和 mental_scale_value 之间没有显著关系
+
+
+```{r}
+data01$stress_group <- cut(data01$stress_level,
+                           breaks = quantile(data$stress_level, probs = c(0, 0.33, 0.66, 1)),
+                           labels = c("Low", "Medium", "High"),
+                           include.lowest = TRUE)
+
+aov_result <- aov(mental_scale_value ~ stress_group, data = data01)
+summary(aov_result)
+
+```
+
+```
+```{r}
+
+# 用中位数划分心理健康：高于中位数 = "Good"，否则 = "Poor"
+median_mental <- median(data01$mental_scale_value, na.rm = TRUE)
+
+data01$mental_binary <- ifelse(data01$mental_scale_value > median_mental, "Good", "Poor")
+
+# 把它转换为因子变量
+data01$mental_binary <- factor(data01$mental_binary, levels = c("Poor", "Good"))
+
+logit_model <- glm(mental_binary ~ stress_level + Screen_Time_Hours,
+                   data = data01, family = binomial)
+
+summary(logit_model)
+
+
+```
+
+```{r}
+# 用模型做预测（返回概率）
+data01$predicted_prob <- predict(logit_model, type = "response")
+
+# 转成分类结果（设定阈值 0.5）
+data01$predicted_class <- ifelse(data01$predicted_prob > 0.5, "Good", "Poor")
+data01$predicted_class <- factor(data01$predicted_class, levels = c("Poor", "Good"))
+
+# 混淆矩阵
+table(Predicted = data01$predicted_class, Actual = data01$mental_binary)
+
+# 准确率
+mean(data01$predicted_class == data01$mental_binary)
+
+```
+
+
+
+
+
+
+
