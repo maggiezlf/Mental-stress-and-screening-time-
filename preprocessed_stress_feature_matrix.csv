@@ -1,0 +1,57 @@
+# 1. Import libraries
+import pandas as pd
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+
+# 2. Load and preprocess your data
+df = pd.read_csv("C:/game on/team-gameon/mental_health_and_technology_usage_2024.csv")
+
+df_model = df[[
+    'Technology_Usage_Hours',
+    'Social_Media_Usage_Hours',
+    'Gaming_Hours',
+    'Screen_Time_Hours',
+    'Sleep_Hours',
+    'Physical_Activity_Hours',
+    'Mental_Health_Status',
+    'Support_Systems_Access',
+    'Work_Environment_Impact',
+    'Online_Support_Usage',
+    'Stress_Level'
+]]
+
+categorical_cols = [
+    'Mental_Health_Status', 
+    'Support_Systems_Access', 
+    'Work_Environment_Impact', 
+    'Online_Support_Usage'
+]
+
+df_encoded = df_model.copy()
+label_encoders = {}
+
+for col in categorical_cols:
+    le = LabelEncoder()
+    df_encoded[col] = le.fit_transform(df_encoded[col])
+    label_encoders[col] = le
+
+# Encode target
+target_encoder = LabelEncoder()
+df_encoded['Stress_Level'] = target_encoder.fit_transform(df_encoded['Stress_Level'])
+
+# Define feature matrix and target vector
+X = df_encoded.drop(columns=['Stress_Level'])
+y = df_encoded['Stress_Level']
+
+# Train-Test Split
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y, 
+    test_size=0.2, 
+    random_state=42, 
+    stratify=y
+)
+
+print("Training shape:", X_train.shape)
+print("Testing shape:", X_test.shape)
+print("\nTraining class distribution:\n", y_train.value_counts())
+print("\nTesting class distribution:\n", y_test.value_counts())
